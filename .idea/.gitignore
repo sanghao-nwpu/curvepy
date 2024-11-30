@@ -1,0 +1,7 @@
+# 忽略所有.idea目录下的文件
+**/*.iml
+**/*.ipr
+**/*.iws
+# 默认忽略的文件
+/shelf/
+/workspace.xml
