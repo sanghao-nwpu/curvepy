@@ -1,8 +1,7 @@
 # curvepy/curves.py
 
 import numpy as np
-from curvepy.core import Curve
-
+from .core import Curve
 
 class CardinalCurve(Curve):
     def __init__(self, control_points, tension=0.5):
