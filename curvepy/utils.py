@@ -1,6 +1,33 @@
 # curvepy/utils.py
 
 import numpy as np
+from scipy.interpolate import CubicSpline
+
+
+def cubic_spline_fit(points, num_samples):
+    """
+    使用三次样条对点集进行拟合并生成等间距点。
+
+    Args:
+        points (list[tuple]): 输入点的列表 [(x1, y1), (x2, y2), ...]。
+        num_samples (int): 需要生成的样本点数量。
+
+    Returns:
+        list[tuple]: 等间距采样后的点集 [(x, y), ...]。
+    """
+    points = np.array(points)
+    x, y = points[:, 0], points[:, 1]
+
+    # 根据原始点构建曲线长度参数
+    t = np.linspace(0, 1, len(points))
+    spline_x = CubicSpline(t, x)
+    spline_y = CubicSpline(t, y)
+
+    # 等间距采样
+    t_new = np.linspace(0, 1, num_samples)
+    sampled_points = [(spline_x(ti), spline_y(ti)) for ti in t_new]
+
+    return sampled_points
 
 
 def generate_random_control_points(num_points=5, x_range=(0, 10), y_range=(0, 10)):
