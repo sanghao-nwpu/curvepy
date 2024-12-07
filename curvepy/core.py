@@ -177,6 +177,39 @@ class Polyline:
 
         return sampled_points
 
+    def _calculate_projection(self, point: tuple, segment: tuple):
+        """
+        计算点到线段的投影点，若投影点在线段的端点外，则返回端点。
+
+        Args:
+            point (tuple): 输入点的坐标 (px, py)。
+            segment (tuple): 线段的端点坐标 ((x1, y1), (x2, y2))。
+
+        Returns:
+            np.array: 投影点坐标。
+            bool: 投影是否在线段的端点外。
+        """
+        px, py = point
+        x1, y1 = segment[0]
+        x2, y2 = segment[1]
+
+        segment_vec = np.array([x2 - x1, y2 - y1])
+        point_vec = np.array([px - x1, py - y1])
+        segment_length_squared = np.dot(segment_vec, segment_vec)
+
+        if segment_length_squared > 0:
+            t = np.dot(point_vec, segment_vec) / segment_length_squared
+        else:
+            t = 0
+
+        if t < 0:  # 投影点在起点外
+            projection_point = np.array([x1, y1])
+        elif t > 1:  # 投影点在终点外
+            projection_point = np.array([x2, y2])
+        else:  # 投影点在线段上
+            projection_point = np.array([x1, y1]) + t * segment_vec
+        return projection_point, t
+
     def calculate_shortest_distance(self, point: tuple, use_extension=True):
         """
         计算点到多段线的最短距离。可以选择是否考虑线段延长线。
@@ -189,114 +222,105 @@ class Polyline:
             float: 点到多段线的最短法向距离。
         """
         px, py = point
-        projections_outside_start = True
-        projections_outside_end = True
+        exist_projections_inside = False
         min_distance = float('inf')
 
         for i in range(1, len(self.points)):
-            x1, y1 = self.points[i - 1]
-            x2, y2 = self.points[i]
+            segment = (self.points[i - 1], self.points[i])
 
-            # 计算点到线段的投影参数 t
-            segment_vec = np.array([x2 - x1, y2 - y1])
-            point_vec = np.array([px - x1, py - y1])
-            segment_length_squared = np.dot(segment_vec, segment_vec)
+            # 计算点到当前线段的投影点
+            projection_point, t = self._calculate_projection(point, segment)
 
-            if segment_length_squared > 0:
-                t = np.dot(point_vec, segment_vec) / segment_length_squared
-            else:
-                t = 0
+            # 更新最小距离
+            distance = np.linalg.norm(np.array([px, py]) - projection_point)
+            min_distance = min(min_distance, distance)
 
-            # 投影点
-            if t < 0: # 投影点在起点外
-                projection_point = np.array([x1, y1])
-                projections_outside_end = False
-            elif t > 1: # 投影点在终点外
-                projection_point = np.array([x2, y2])
-                projections_outside_start = False
-            else:
-                projection_point = np.array([x1, y1]) + t * segment_vec
-                projections_outside_start = False
-                projections_outside_end = False
-
+            # 判断是否存在投影点在线段的端点内
+            if t > 0 and t < 1:
+                exist_projections_inside = True
+           
             # 计算点到投影点的欧式距离
             distance = np.linalg.norm(np.array([px, py]) - projection_point)
             # 更新最小距离
             min_distance = min(min_distance, distance)
-
-        # 如果选择考虑延长线，且所有投影点都在起点外，计算点到第一条线段延长线的法向距离
-        if use_extension and projections_outside_start:
-            x1, y1 = self.points[0]
-            x2, y2 = self.points[1]
-            segment_vec = np.array([x2 - x1, y2 - y1])
-            point_vec = np.array([px - x1, py - y1])
-            segment_length_squared = np.dot(segment_vec, segment_vec)
-
-            if segment_length_squared > 0:
-                t = np.dot(point_vec, segment_vec) / segment_length_squared
-                projection_point = np.array([x1, y1]) + t * segment_vec  # 延长线起点
-                min_distance = np.linalg.norm(np.array([px, py]) - projection_point)
-
-        # 如果选择考虑延长线，且所有投影点都在终点外，计算点到最后一条线段延长线的法向距离
-        if use_extension and projections_outside_end:
-            x1, y1 = self.points[-2]
-            x2, y2 = self.points[-1]
-            segment_vec = np.array([x2 - x1, y2 - y1])
-            point_vec = np.array([px - x1, py - y1])
-            segment_length_squared = np.dot(segment_vec, segment_vec)
-
-            if segment_length_squared > 0:
-                t = np.dot(point_vec, segment_vec) / segment_length_squared
-                projection_point = np.array([x1, y1]) + t * segment_vec  # 延长线起点
-                min_distance = np.linalg.norm(np.array([px, py]) - projection_point)
-
+        
+        # 考虑延长线
+        if use_extension and not exist_projections_inside:
+            segment = (self.points[0], self.points[1])
+            t = self._calculate_projection(point, segment)[1]
+            if t > 1:  # 投影点在终点外
+                segment = (self.points[-2], self.points[-1])
+                t = self._calculate_projection(point, segment)[1]
+            projection_point_extension = np.array(segment[0]) + t * np.array(np.array(segment[1]) - np.array(segment[0]))
+            min_distance = np.linalg.norm(np.array([px, py]) - projection_point_extension)
+        
         return min_distance
-
-    def calculate_normal_distance(self, point):
+    
+    def calculate_distance_to_another_polyline(self, another_polyline: 'Polyline'):
         """
-        计算点到多段线中最近线段的最短法向距离。
+        计算当前多段线到另一个多段线的距离。
 
         Args:
-            point (tuple): 输入点的坐标 (x, y)。
-            polyline_points (list[tuple]): 多段线的离散点集 [(x1, y1), (x2, y2), ...]。
+            another_polyline (Polyline): 另一个多段线对象。
 
         Returns:
-            float: 点到最近线段的最短法向距离。
+            list: 当前多段线每个点到多段线 B 的最短距离列表。
         """
+        distances = []
+        for point in self.points:
+            # 计算当前多段线的每个点到多段线B的最短距离
+            distance = another_polyline.calculate_shortest_distance(point)
+            distances.append(distance)
 
-        min_distance = float('inf')  # 初始化为无穷大
-        px, py = point
+        avg_distance = sum(distances) / len(distances)
 
-        for i in range(1, len(polyline_points)):
-            # 线段起点和终点
-            x1, y1 = polyline_points[i - 1]
-            x2, y2 = polyline_points[i]
+        return distances, avg_distance
+    
+    def find_closest_polyline(self, candidate_polylines: list):
+        """
+        从候选多段线集合中找到与当前多段线最近的多段线。
 
-            # 将线段向量和点到起点的向量表示为 numpy 数组
-            segment_vec = np.array([x2 - x1, y2 - y1])
-            point_vec = np.array([px - x1, py - y1])
+        Args:
+            candidate_polylines (list[Polyline]): 候选多段线对象的列表。
 
-            # 线段长度平方（避免多次计算平方根提高性能）
-            segment_length_squared = np.dot(segment_vec, segment_vec)
+        Returns:
+            Polyline: 距离当前多段线最近的多段线对象。
+            float: 距离值。
+        """
+        min_distance = float('inf')
+        closest_polyline = None
 
-            # 点投影到线段的参数 t（0 <= t <= 1 表示投影点在线段上）
-            if segment_length_squared > 0:
-                t = np.dot(point_vec, segment_vec) / segment_length_squared
-            else:
-                t = 0  # 零长度线段的特殊情况
+        for candidate_polyline in candidate_polylines:
+            # 计算当前多段线与候选多段线的距离
+            distances, avg_distance = self.calculate_distance_to_another_polyline(candidate_polyline)
 
-            # 投影点
-            if t < 0:  # 投影点在起点外
-                projection_point = np.array([x1, y1])
-            elif t > 1:  # 投影点在终点外
-                projection_point = np.array([x2, y2])
-            else:  # 投影点在线段上
-                projection_point = np.array([x1, y1]) + t * segment_vec
+            # 如果找到一个更小的距离，则更新最小距离和最接近的多段线
+            if avg_distance < min_distance:
+                min_distance = avg_distance
+                closest_polyline = candidate_polyline
 
-            # 计算点到投影点的欧式距离
-            distance = np.linalg.norm(np.array([px, py]) - projection_point)
+        return closest_polyline, min_distance
 
-            # 更新最小距离
-            min_distance = min(min_distance, distance)
 
-        return min_distance
+def calculate_distance_between_polylines(polylines_estimation: list, polylines_groundtruth: list) -> list:
+    """
+    计算估计值集合中每个多段线与真值集合中最近多段线之间的误差，并将所有误差值记录在列表中。
+
+    Args:
+        polylines_estimation (list[Polyline]): 多段线集合A。
+        polylines_groundtruth (list[Polyline]): 多段线集合B。
+
+    Returns:
+        list: 存储每个多段线与集合B中最近多段线之间的误差的列表。
+    """
+    error_list = []
+
+    # 遍历集合A中的每个多段线
+    for polyline_estimation in polylines_estimation:
+        # 找到与当前多段线最接近的多段线，并计算误差
+        closest_polyline, min_distance = polyline_estimation.find_closest_polyline(polylines_groundtruth)
+        
+        # 将误差值添加到列表中（这里使用最小距离或者平均距离，具体依需求而定）
+        error_list.append(min_distance)
+
+    return error_list
