@@ -27,8 +27,8 @@ def read_polyline_from_file(file_path):
 
 def example_polyline_main():
     # 从文件中读取多段线
-    polyline1 = read_polyline_from_file('../example_data/polyline_1.txt')
-    polyline2 = read_polyline_from_file('../example_data/polyline_2.txt')
+    polyline1 = read_polyline_from_file('./example_data/polyline_1.txt')
+    polyline2 = read_polyline_from_file('./example_data/polyline_2.txt')
 
     # 调用 Polyline 类中的方法进行操作
     print("Polyline1:")
