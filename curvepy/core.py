@@ -2,7 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from .utils import cubic_spline_fit
+# from .utils import cubic_spline_fit
 
 class Curve:
     def __init__(self, control_points):
@@ -68,9 +68,11 @@ class Polyline:
         Initialize the polyline with an optional set of points.
 
         Args:
+            id (int): The unique identifier of the polyline.
             points (list of tuple): A list of (x, y) tuples representing the points of the polyline.
                                     If None, initializes an empty polyline.
         """
+        # self.id = id
         self.points = points if points else []
 
     def add_point(self, point):
@@ -81,6 +83,15 @@ class Polyline:
             point (tuple): A tuple (x, y) representing the new point to add.
         """
         self.points.append(point)
+
+    # def setID(self, id):
+    #     """
+    #     Set the unique identifier of the polyline.
+
+    #     Args:
+    #         id (int): The new unique identifier of the polyline.
+    #     """
+    #     self.id = id
 
     def length(self):
         """
@@ -133,14 +144,17 @@ class Polyline:
         Returns:
             list[tuple]: 等间距离散化后的点集。
         """
+        discretize_points = None
         if method == "direct":
             # 简单的等间距采样，直接取点
-            return self._direct_discretize(num_samples)
+            discretize_points = self._direct_discretize(num_samples)
         elif method == "spline":
             # 使用三次样条拟合后再离散化
-            return cubic_spline_fit(self.points, num_samples)
+            # discretize_points = cubic_spline_fit(self.points, num_samples)
+            raise ValueError(f"Unknown method '{method}' for discretization.")
         else:
             raise ValueError(f"Unknown method '{method}' for discretization.")
+        return Polyline(discretize_points)
 
     def _direct_discretize(self, num_samples):
         """
@@ -210,7 +224,7 @@ class Polyline:
             projection_point = np.array([x1, y1]) + t * segment_vec
         return projection_point, t
 
-    def calculate_shortest_distance(self, point: tuple, use_extension=True):
+    def calculate_distance_to_point(self, point: tuple, use_extension=False):
         """
         计算点到多段线的最短距离。可以选择是否考虑线段延长线。
 
@@ -256,12 +270,12 @@ class Polyline:
         
         return min_distance
     
-    def calculate_distance_to_another_polyline(self, another_polyline: 'Polyline'):
+    def calculate_distance_to_polyline(self, polyline: 'Polyline', use_extension=False):
         """
         计算当前多段线到另一个多段线的距离。
 
         Args:
-            another_polyline (Polyline): 另一个多段线对象。
+            polyline (Polyline): 另一个多段线对象。
 
         Returns:
             list: 当前多段线每个点到多段线 B 的最短距离列表。
@@ -269,13 +283,43 @@ class Polyline:
         distances = []
         for point in self.points:
             # 计算当前多段线的每个点到多段线B的最短距离
-            distance = another_polyline.calculate_shortest_distance(point)
+            distance = polyline.calculate_distance_to_point(point, use_extension)
             distances.append(distance)
 
         avg_distance = sum(distances) / len(distances)
 
         return distances, avg_distance
     
+    def evaluate_metric(self, polyline_base: 'Polyline', metric_type: str):
+        """
+        评测当前多段线的性能指标。
+
+        Args:
+            polyline_base (Polyline): 多段线基准。
+
+        Returns:
+            float: 返回的指标值。
+        """
+        num = round(self.length() / 0.2)
+        eva_polyline = self.discretize(num)
+        num = round(polyline_base.length() / 0.2)
+        eva_polyline_base = polyline_base.discretize(num)
+
+        distances, _ = eva_polyline.calculate_distance_to_polyline(eva_polyline_base)
+
+        if metric_type == 'precision':
+            metric = (len([x for x in distances if x < 0.2])) / len(distances)
+        elif metric_type == 'recall':
+            metric = (len([x for x in distances if x < 0.2])) / len(eva_polyline_base.points)
+        elif metric_type == 'mae':
+            metric = sum([abs(x) for x in distances]) / len(distances)
+        elif metric_type == 'rmse':
+            metric = (sum([x ** 2 for x in distances]) / len(distances)) ** 0.5
+        else:
+            raise ValueError(f"Unknown metric type '{metric_type}'")
+
+        return metric
+
     def find_closest_polyline(self, candidate_polylines: list):
         """
         从候选多段线集合中找到与当前多段线最近的多段线。
@@ -292,7 +336,7 @@ class Polyline:
 
         for candidate_polyline in candidate_polylines:
             # 计算当前多段线与候选多段线的距离
-            distances, avg_distance = self.calculate_distance_to_another_polyline(candidate_polyline)
+            distances, avg_distance = self.calculate_distance_to_polyline(candidate_polyline)
 
             # 如果找到一个更小的距离，则更新最小距离和最接近的多段线
             if avg_distance < min_distance:
@@ -301,6 +345,19 @@ class Polyline:
 
         return closest_polyline, min_distance
 
+def discretize_polyline(polyline: 'Polyline', num_samples: int, method: str) -> 'Polyline':
+    """
+    对多段线进行等间距散化。
+
+    Args:
+        polyline (Polyline): 多段线对象。
+        num_samples (int): 需要生成的采样点数量。
+        method (str): 离散化方法，可选 "direct" 或 "spline"。
+
+    Returns:
+        Polyline: 等间距散化后的多段线对象。
+    """
+    return polyline.discretize(num_samples, method)
 
 def calculate_distance_between_polylines(polylines_estimation: list, polylines_groundtruth: list) -> list:
     """
@@ -324,3 +381,4 @@ def calculate_distance_between_polylines(polylines_estimation: list, polylines_g
         error_list.append(min_distance)
 
     return error_list
+

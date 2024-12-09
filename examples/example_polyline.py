@@ -4,6 +4,7 @@
 @date: 2021/11/18
 """
 
+import os
 from curvepy.core import Polyline, calculate_distance_between_polylines
 
 def read_polyline_from_file(file_path):
@@ -16,47 +17,50 @@ def read_polyline_from_file(file_path):
     Returns:
         Polyline: 由文件数据创建的 Polyline 对象。
     """
-    points = []
+    polylines = {}  # 用于存储多段线ID及其对应的坐标点
+
     with open(file_path, 'r') as f:
         for line in f:
-            # 每行是一个点的坐标，按逗号分割
-            point = tuple(map(float, line.strip().split(',')))
-            points.append(point)
-    return Polyline(points)
+            parts = line.strip().split(' ')  # 假设ID和坐标用空格分隔
+            polyline_id = parts[0]  # 第一列为多段线ID
+            point = tuple(map(float, parts[1:]))  # 剩下的为点坐标
+            
+            if polyline_id not in polylines:
+                polylines[polyline_id] = []  # 如果ID不存在，初始化一个空列表
+
+            polylines[polyline_id].append(point)  # 添加点到对应的多段线
+
+    # 将字典转换为Polyline对象集合
+    polyline_list = [Polyline(points) for _, points in polylines.items()]
+    
+    return polyline_list  # 返回Polyline对象的列表
 
 
-def example_polyline_main():
+def example_polyline_main(script_dir: str):
     # 从文件中读取多段线
-    polyline1 = read_polyline_from_file('./example_data/polyline_1.txt')
-    polyline2 = read_polyline_from_file('./example_data/polyline_2.txt')
+    polylines1 = read_polyline_from_file(os.path.join(script_dir, '../example_data/polyline_1.txt'))
+    polylines2 = read_polyline_from_file(os.path.join(script_dir, '../example_data/polyline_2.txt'))
 
-    # 调用 Polyline 类中的方法进行操作
-    print("Polyline1:")
-    print(f"Points: {polyline1.points}")
 
     # 计算点到多段线的最短法向距离
     point = (2.5, 0.5)
-    distance = polyline1.calculate_shortest_distance(point)
-    print(f"Shortest distance from {point} to Polyline1: {distance}")
+    for polyline in polylines1:
+        distance = polyline.calculate_distance_to_point(point, use_extension=True)
+        print(f"Shortest distance from {point} to Polyline{polyline.points}: {distance}")
 
     # 计算多段线到多段线的误差
-    distances_polyline, avg_distance = polyline1.calculate_distance_to_another_polyline(polyline2)
-    print(f"Distance between Polyline1 and Polyline2: {avg_distance}")
+    for polyline1 in polylines1:
+        for polyline2 in polylines2:
+            distances, avg_distance = polyline1.calculate_distance_to_polyline(polyline2, use_extension=True)
+            print(f"Distance between Polyline{polyline1.points} and Polyline{polyline2.points}: {avg_distance}")
 
     # 计算多段线 A 到 B 集合中最接近的多段线
-    polyline_set = [polyline1, polyline2]  # 示例集合
-    closest_polyline, min_distance = polyline1.find_closest_polyline(polyline_set)
-    print(f"Closest polyline to Polyline1: {closest_polyline.points}")
-    print(f"Distance: {min_distance}")
-
-    # 计算多段线集合中的所有多段线与 Polyline1 的误差
-    polyline1_set = [polyline1, polyline2]
-    polyline2_set = [polyline1, polyline2]
-    errors = calculate_distance_between_polylines(polyline1_set, polyline2_set)
-    print("Errors between Polyline1 and all polylines in the set:")
-    for i, error in enumerate(errors):
-        print(f"Error with Polyline {i + 1}: {error}")
-
+    for polyline1 in polylines1:
+        closest_polyline, min_distance = polyline1.find_closest_polyline(polylines2)
+        # print(f"Closest polyline to Polyline{polyline1.id}: {closest_polyline.points}")
+        print(f"Distance: {min_distance}")
 
 if __name__ == "__main__":
-    example_polyline_main()
+    # 获取脚本所在的目录
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    example_polyline_main(script_dir)

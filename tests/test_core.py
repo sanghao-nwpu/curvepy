@@ -14,7 +14,7 @@ class TestPolyline(unittest.TestCase):
     def test_calculate_shortest_distance(self):
         """测试点到多段线的最短距离"""
         point = (1, 0)
-        distance = self.polyline_a.calculate_shortest_distance(point)
+        distance = self.polyline_a.calculate_distance_to_points(point)
         print(distance)
         self.assertAlmostEqual(distance, 1 / np.sqrt(2), places=5)
 

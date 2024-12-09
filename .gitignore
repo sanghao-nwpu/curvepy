@@ -1,0 +1,28 @@
+# Python bytecode
+**/__pycache__/
+*.py[cod]
+*.pyc
+
+# 环境变量文件
+.env
+
+# Pytest
+.cache
+*.cover
+*.coverage
+
+# 脚本生成的日志文件
+*.log
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 其它
+*.db
+*.sqlite3
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+*.pyd
