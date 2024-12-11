@@ -167,15 +167,16 @@ class Polyline:
             list[tuple]: 等间距采样后的点集。
         """
         total_length = self.length()
-        segment_lengths = [((self.points[i][0] - self.points[i - 1][0]) ** 2 +
-                            (self.points[i][1] - self.points[i - 1][1]) ** 2) ** 0.5
-                           for i in range(1, len(self.points))]
+        segment_lengths = [
+            ((self.points[i][0] - self.points[i - 1][0]) ** 2 +
+             (self.points[i][1] - self.points[i - 1][1]) ** 2) ** 0.5
+            for i in range(1, len(self.points))
+        ]
 
         # 计算累计长度
         cumulative_lengths = [0] + np.cumsum(segment_lengths).tolist()
-
-        # 等间距点的目标位置
-        target_distances = np.linspace(0, total_length, num_samples)
+        # 等间距点的目标位置(+1是为了包括终点)
+        target_distances = np.linspace(0, total_length, num_samples + 1)
 
         # 在累计长度中找到对应的插值点
         sampled_points = []
@@ -290,7 +291,7 @@ class Polyline:
 
         return distances, avg_distance
     
-    def evaluate_metric(self, polyline_base: 'Polyline', metric_type: str):
+    def evaluate_metric(self, polyline_base: 'Polyline', precision_thre=1.5):
         """
         评测当前多段线的性能指标。
 
@@ -307,18 +308,12 @@ class Polyline:
 
         distances, _ = eva_polyline.calculate_distance_to_polyline(eva_polyline_base)
 
-        if metric_type == 'precision':
-            metric = (len([x for x in distances if x < 0.2])) / len(distances)
-        elif metric_type == 'recall':
-            metric = (len([x for x in distances if x < 0.2])) / len(eva_polyline_base.points)
-        elif metric_type == 'mae':
-            metric = sum([abs(x) for x in distances]) / len(distances)
-        elif metric_type == 'rmse':
-            metric = (sum([x ** 2 for x in distances]) / len(distances)) ** 0.5
-        else:
-            raise ValueError(f"Unknown metric type '{metric_type}'")
+        precision = (len([x for x in distances if x < precision_thre])) / len(distances)
+        recall = (len([x for x in distances if x < precision_thre])) / len(eva_polyline_base.points)
+        mae = sum([abs(x) for x in distances]) / len(distances)
+        rmse = (sum([x ** 2 for x in distances]) / len(distances)) ** 0.5
 
-        return metric
+        return precision, recall, mae, rmse
 
     def find_closest_polyline(self, candidate_polylines: list):
         """

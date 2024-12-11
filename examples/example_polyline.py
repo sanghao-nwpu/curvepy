@@ -5,7 +5,7 @@
 """
 
 import os
-from curvepy.core import Polyline, calculate_distance_between_polylines
+from curvepy.core import Polyline
 
 def read_polyline_from_file(file_path):
     """
@@ -23,7 +23,8 @@ def read_polyline_from_file(file_path):
         for line in f:
             parts = line.strip().split(' ')  # 假设ID和坐标用空格分隔
             polyline_id = parts[0]  # 第一列为多段线ID
-            point = tuple(map(float, parts[1:]))  # 剩下的为点坐标
+            polyline_time = parts[1]  # 第二列为时间戳
+            point = tuple(map(float, parts[2:]))  # 剩下的为点坐标
             
             if polyline_id not in polylines:
                 polylines[polyline_id] = []  # 如果ID不存在，初始化一个空列表
